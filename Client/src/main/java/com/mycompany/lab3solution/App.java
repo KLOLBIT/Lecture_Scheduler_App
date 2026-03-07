@@ -1,13 +1,15 @@
 package com.mycompany.lab3solution;
 
-
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import javafx.application.Application;
+import javafx.application.Platform;
 import static javafx.application.Application.launch;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -41,8 +43,9 @@ import javafx.stage.Stage;
  *   ACTION|DATE|TIME|ROOM|MODULE
  */
 public class App extends Application {
+    private static final String SERVER_HOST = "127.0.0.1";
+    private static final int SERVER_PORT = 1234;
 
-    // --- UI controls ---
     private ComboBox<String> actionBox;
     private DatePicker datePicker;
     private ComboBox<String> timeBox;
@@ -58,9 +61,9 @@ public class App extends Application {
 
     private TableView<Row> table;
 
-    // --- Server simulation (in-memory) ---
-    private final ServerSim server = new ServerSim("LM051-2026");
+    private final TcpClient client = new TcpClient(SERVER_HOST, SERVER_PORT);
     private boolean stopped = false;
+    private boolean requestInProgress = false;
 
     @Override
     public void start(Stage stage) {
@@ -77,6 +80,11 @@ public class App extends Application {
         stage.show();
 
         refreshTableFromServer();
+    }
+
+    @Override
+    public void stop() {
+        client.closeQuietly();
     }
 
     private Node buildHeader() {
@@ -199,47 +207,31 @@ public class App extends Application {
 
     private void onSend() {
         if (stopped) {
-            alertInfo("The connection is stopped (lab simulation). Press Clear to reset.");
+            alertInfo("The connection is stopped. Press Clear to start again.");
+            return;
+        }
+
+        if (requestInProgress) {
             return;
         }
 
         String action = actionBox.getValue();
-        LocalDate date = datePicker.getValue();
-        String time = timeBox.getValue();
-        String room = roomField.getText();
-        String module = moduleField.getText();
-
-        String request = buildRequest(action, date, time, room, module);
-
-        log("CLIENT> " + request);
-        String response = server.handle(request);
-        log("SERVER> " + response);
-
-        if (response.startsWith("OK|")) {
-            statusLabel.setText("Status: OK");
-        } else if (response.startsWith("ERROR|")) {
-            statusLabel.setText("Status: ERROR");
-        } else if (response.startsWith("TERMINATE|")) {
-            statusLabel.setText("Status: TERMINATED");
-            stopped = true;
-            sendBtn.setDisable(true);
+        String request = buildRequest(action, datePicker.getValue(), timeBox.getValue(), roomField.getText(), moduleField.getText());
+        if (request == null) {
+            return;
         }
 
-        // Update table after actions
-        refreshTableFromServer();
+        boolean explicitDisplay = "DISPLAY".equals(action);
+        boolean refreshAfter = !explicitDisplay;
+        executeRequest(request, explicitDisplay, refreshAfter, false);
     }
 
     private void onStop() {
-        if (stopped) return;
+        if (stopped || requestInProgress) {
+            return;
+        }
 
-        String request = "STOP||||";
-        log("CLIENT> " + request);
-        String response = server.handle(request);
-        log("SERVER> " + response);
-
-        stopped = true;
-        sendBtn.setDisable(true);
-        statusLabel.setText("Status: TERMINATED (STOP pressed)");
+        executeRequest("STOP||||", false, false, true);
     }
 
     private void onClear() {
@@ -250,10 +242,12 @@ public class App extends Application {
         timeBox.getSelectionModel().selectFirst();
 
         stopped = false;
-        sendBtn.setDisable(false);
+        requestInProgress = false;
         statusLabel.setText("Status: Ready");
+        updateButtonStates();
 
         log("--- cleared ---");
+        refreshTableFromServer();
     }
 
     private String buildRequest(String action, LocalDate date, String time, String room, String module) {
@@ -288,12 +282,116 @@ public class App extends Application {
     }
 
     private void refreshTableFromServer() {
-        List<Lecture> lectures = server.getAllLecturesSorted();
+        if (requestInProgress || stopped) {
+            return;
+        }
+
+        executeRequest("DISPLAY||||", true, false, false);
+    }
+
+    private void executeRequest(String request, boolean updateTableFromResponse, boolean refreshAfter, boolean stopRequest) {
+        requestInProgress = true;
+        updateButtonStates();
+
+        Thread worker = new Thread(() -> {
+            try {
+                String responseText = client.send(request);
+                ServerResponse response = parseResponse(responseText);
+
+                ServerResponse displayResponse = null;
+                if (refreshAfter && !stopRequest) {
+                    displayResponse = parseResponse(client.send("DISPLAY||||"));
+                }
+
+                if (stopRequest) {
+                    client.closeQuietly();
+                }
+
+                ServerResponse finalDisplayResponse = displayResponse;
+                Platform.runLater(() -> applyServerResponses(request, response, finalDisplayResponse, updateTableFromResponse, stopRequest));
+            } catch (IOException | IllegalArgumentException e) {
+                client.closeQuietly();
+                Platform.runLater(() -> {
+                    requestInProgress = false;
+                    updateButtonStates();
+                    statusLabel.setText("Status: Connection Error");
+                    log("CLIENT> " + request);
+                    log("SERVER> ERROR: " + e.getMessage());
+                    alertWarn("Could not communicate with the server. " + e.getMessage());
+                });
+            }
+        });
+
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void applyServerResponses(String request, ServerResponse response, ServerResponse displayResponse, boolean updateTableFromResponse, boolean stopRequest) {
+        requestInProgress = false;
+        log("CLIENT> " + request);
+        log("SERVER> " + response.raw);
+
+        if (stopRequest && response.code == 200 && "TERMINATE".equals(response.body)) {
+            stopped = true;
+            statusLabel.setText("Status: TERMINATED");
+            sendBtn.setDisable(true);
+            stopBtn.setDisable(true);
+            return;
+        }
+
+        statusLabel.setText(response.code == 200 ? "Status: OK (200)" : "Status: ERROR (" + response.code + ")");
+
+        if (updateTableFromResponse && response.code == 200) {
+            updateTable(response.body);
+        } else if (displayResponse != null && displayResponse.code == 200) {
+            updateTable(displayResponse.body);
+        }
+
+        updateButtonStates();
+    }
+
+    private ServerResponse parseResponse(String responseText) throws IOException {
+        if (responseText == null) {
+            throw new IOException("Server closed the connection.");
+        }
+
+        String[] parts = responseText.split("\\|", 3);
+        if (parts.length != 3 || !"RESULT".equals(parts[0])) {
+            throw new IOException("Invalid response: " + responseText);
+        }
+
+        int code;
+        try {
+            code = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            throw new IOException("Invalid response code: " + responseText);
+        }
+
+        return new ServerResponse(responseText, code, parts[2]);
+    }
+
+    private void updateTable(String payload) {
         List<Row> rows = new ArrayList<>();
-        for (Lecture l : lectures) {
-            rows.add(new Row(l.date.toString(), l.time, l.room, l.module));
+
+        if (payload != null && !payload.isBlank()) {
+            String[] entries = payload.split(";");
+            for (String entry : entries) {
+                if (entry.isBlank()) {
+                    continue;
+                }
+
+                String[] fields = entry.split(",", 4);
+                if (fields.length == 4) {
+                    rows.add(new Row(fields[0], fields[1], fields[2], fields[3]));
+                }
+            }
         }
         table.setItems(FXCollections.observableArrayList(rows));
+    }
+
+    private void updateButtonStates() {
+        sendBtn.setDisable(stopped || requestInProgress);
+        stopBtn.setDisable(stopped || requestInProgress);
     }
 
     private void log(String msg) {
@@ -312,10 +410,6 @@ public class App extends Application {
         a.showAndWait();
     }
 
-    // ------------------------------------------------------------
-    // Simple data classes (kept inside same file for simplicity)
-    // ------------------------------------------------------------
-
     /** TableView row */
     public static class Row {
         final SimpleStringProperty date;
@@ -331,95 +425,69 @@ public class App extends Application {
         }
     }
 
-    /** Lecture record for the "server" */
-    public static class Lecture {
-        final LocalDate date;
-        final String time;
-        final String room;
-        final String module;
+    private static class ServerResponse {
+        final String raw;
+        final int code;
+        final String body;
 
-        Lecture(LocalDate date, String time, String room, String module) {
-            this.date = date;
-            this.time = time;
-            this.room = room;
-            this.module = module;
-        }
-
-        String slotKey() { return date + "|" + time; }
-
-        @Override
-        public String toString() {
-            return date + " " + time + " Room " + room + " (" + module + ")";
+        ServerResponse(String raw, int code, String body) {
+            this.raw = raw;
+            this.code = code;
+            this.body = body;
         }
     }
 
-    /**
-     * Server simulation:
-     * - Stores lectures in memory
-     * - Handles request strings and returns response strings
-     */
-    public static class ServerSim {
-        private final String courseCode;
-        private final Map<String, Lecture> schedule = new HashMap<>();
+    private static class TcpClient {
+        private final String host;
+        private final int port;
 
-        public ServerSim(String courseCode) {
-            this.courseCode = courseCode;
+        private Socket socket;
+        private BufferedReader reader;
+        private PrintWriter writer;
+
+        TcpClient(String host, int port) {
+            this.host = host;
+            this.port = port;
         }
 
-        public String handle(String request) {
+        synchronized String send(String request) throws IOException {
+            ensureConnected();
+            writer.println(request);
+            return reader.readLine();
+        }
+
+        synchronized void closeQuietly() {
             try {
-                String[] parts = request.split("\\|", -1);
-                String action = parts[0].trim().toUpperCase();
-
-                if ("STOP".equals(action)) {
-                    return "TERMINATE|Server confirms termination.";
+                if (reader != null) {
+                    reader.close();
                 }
-
-               
-
-                if ("DISPLAY".equals(action)) {
-                    return "OK|Displayed schedule.";
-                }
-
-                if ("ADD".equals(action)) {
-                    // ADD|DATE|TIME|ROOM|MODULE
-                    LocalDate date = LocalDate.parse(parts[1]);
-                    String time = parts[2].trim();
-                    String room = parts[3].trim();
-                    String module = parts[4].trim();
-
-                    Lecture newL = new Lecture(date, time, room, module);
-                    String key = newL.slotKey();
-
-                    schedule.put(key, newL);
-                    return "OK|Added: " + newL;
-                }
-
-                if ("REMOVE".equals(action)) {
-                    // REMOVE|DATE|TIME||
-                    LocalDate date = LocalDate.parse(parts[1]);
-                    String time = parts[2].trim();
-                    String key = date + "|" + time;
-
-                    Lecture removed = schedule.remove(key);
-                    if (removed == null) {
-                        return "ERROR|No lecture found at " + date + " " + time + " to remove.";
-                    }
-                    return "OK|Removed: " + removed;
-                }
-
-                
-
-            }  catch (Exception e) {
-                return "ERROR|Bad request: " + e.getMessage();
+            } catch (IOException ignored) {
             }
-            return null;
+
+            if (writer != null) {
+                writer.close();
+            }
+
+            try {
+                if (socket != null) {
+                    socket.close();
+                }
+            } catch (IOException ignored) {
+            }
+
+            reader = null;
+            writer = null;
+            socket = null;
         }
 
-        public List<Lecture> getAllLecturesSorted() {
-            List<Lecture> all = new ArrayList<>(schedule.values());
-            all.sort(Comparator.comparing((Lecture l) -> l.date).thenComparing(l -> l.time));
-            return all;
+        private void ensureConnected() throws IOException {
+            if (socket != null && socket.isConnected() && !socket.isClosed()) {
+                return;
+            }
+
+            socket = new Socket(host, port);
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            writer = new PrintWriter(socket.getOutputStream(), true);
         }
     }
 

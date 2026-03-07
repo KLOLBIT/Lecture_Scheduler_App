@@ -1,0 +1,15 @@
+# IDE files
+.idea/
+*.iml
+
+# Maven / Java build output
+target/
+out/
+*.class
+
+# Logs
+*.log
+
+# JVM crash files
+hs_err_pid*
+replay_pid*

@@ -1,20 +1,14 @@
 package services.scheduling;
 
 import data.Lecture;
-import data.WeekSchedule;
 import data.exceptions.ScheduleConflictException;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
-public class SchedulingService implements ISchedulingService {
-    private static final int MAX_MODULES = 5;
-
+public class SchedulingService {
     private final ArrayList<Lecture> lectures = new ArrayList<Lecture>();
 
-    @Override
     public void addLecture(Lecture lecture) throws ScheduleConflictException {
         validateLecture(lecture);
 
@@ -31,10 +25,10 @@ public class SchedulingService implements ISchedulingService {
         lectures.add(lecture);
     }
 
-    @Override
     public Lecture removeLecture(LocalDate date, String timeSlot) {
         for (int i = 0; i < lectures.size(); i++) {
-            Lecture lecture = lectures.get(i);
+            var lecture = lectures.get(i);
+
             if (lecture.date.equals(date) && lecture.timeSlot.equals(timeSlot)) {
                 lectures.remove(i);
                 return lecture;
@@ -44,45 +38,38 @@ public class SchedulingService implements ISchedulingService {
         return null;
     }
 
-    @Override
-    public WeekSchedule getWeekSchedule() {
-        WeekSchedule schedule = new WeekSchedule();
-        for (Lecture lecture : lectures) {
-            schedule.addLecture(lecture);
-        }
+    public List<Lecture> getSchedule() {
+        var schedule = new ArrayList<Lecture>(lectures);
+        schedule.sort(Comparator.comparing((Lecture lecture) -> lecture.date).thenComparing(lecture -> lecture.timeSlot));
         return schedule;
     }
 
     private void validateLecture(Lecture lecture) {
         if (lecture == null) {
-            throw new IllegalArgumentException("Lecture cannot be null.");
+            throw new IllegalArgumentException("Lecture is missing");
         }
         if (lecture.date == null) {
-            throw new IllegalArgumentException("Lecture date is required.");
+            throw new IllegalArgumentException("Date is missing");
         }
-        if (isBlank(lecture.timeSlot)) {
-            throw new IllegalArgumentException("Lecture time slot is required.");
+        if (lecture.timeSlot == null) {
+            throw new IllegalArgumentException("Time slot is missing");
         }
-        if (isBlank(lecture.roomNumber)) {
-            throw new IllegalArgumentException("Room number is required.");
+        if (lecture.roomNumber == null) {
+            throw new IllegalArgumentException("Room number is missing");
         }
-        if (isBlank(lecture.moduleName)) {
-            throw new IllegalArgumentException("Module name is required.");
+        if (lecture.moduleName == null) {
+            throw new IllegalArgumentException("Module name is missing");
         }
 
-        Set<String> moduleNames = new LinkedHashSet<>();
+        var moduleNames = new HashSet<>();
         for (Lecture existing : lectures) {
             moduleNames.add(existing.moduleName);
         }
 
         moduleNames.add(lecture.moduleName);
 
-        if (moduleNames.size() > MAX_MODULES) {
-            throw new IllegalArgumentException("Only up to five modules are supported for this course.");
+        if (moduleNames.size() > 5) {
+            throw new IllegalArgumentException("5 modules are supported for this course");
         }
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
     }
 }

@@ -1,55 +1,44 @@
 package controllers;
 
 import data.Lecture;
-import data.WeekSchedule;
 import data.exceptions.IncorrectActionException;
 import data.exceptions.ScheduleConflictException;
-import services.scheduling.ISchedulingService;
 import services.scheduling.SchedulingService;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 
 public class ApiController {
-    private final ISchedulingService schedulingService;
+    private final SchedulingService schedulingService;
 
     public ApiController() {
-        this(new SchedulingService());
+        schedulingService = new SchedulingService();
     }
 
-    public ApiController(ISchedulingService schedulingService) {
-        this.schedulingService = schedulingService;
+    public String handleAdd(String dateText, String timeSlot, String roomNumber, String moduleName) throws ScheduleConflictException {
+        var lecture = new Lecture(parseDate(dateText), timeSlot, roomNumber, moduleName);
+        schedulingService.addLecture(lecture);
+        return "Lecture added";
     }
 
-    public String addLecture(LocalDate date, String timeSlot, String roomNumber, String moduleName) {
-        Lecture lecture = new Lecture(date, timeSlot, roomNumber, moduleName);
-
-        try {
-            schedulingService.addLecture(lecture);
-        } catch (ScheduleConflictException | IllegalArgumentException e) {
-            return e.getMessage();
-        }
-
-        return "Lecture scheduled successfully for " + moduleName + " in room " + roomNumber + " at " + timeSlot + " on " + date + ".";
+    public Lecture handleRemove(String dateText, String timeSlot) {
+        return schedulingService.removeLecture(parseDate(dateText), timeSlot);
     }
 
-    public String removeLecture(LocalDate date, String timeSlot) {
-        Lecture removedLecture = schedulingService.removeLecture(date, timeSlot);
-        if (removedLecture == null) {
-            return "No lecture found at " + timeSlot + " on " + date + ".";
-        }
-
-        return "Removed lecture and freed room " + removedLecture.roomNumber + " at " + removedLecture.timeSlot + " on " + removedLecture.date + ".";
+    public List<Lecture> handleDisplay() {
+        return schedulingService.getSchedule();
     }
 
-    public WeekSchedule displaySchedule() {
-        return schedulingService.getWeekSchedule();
-    }
-
-    public String handleOther(String action) throws IncorrectActionException {
+    public void handleOther(String action) throws IncorrectActionException {
         throw new IncorrectActionException("Unsupported action: " + action);
     }
 
-    public String stop() {
-        return "TERMINATE";
+    private LocalDate parseDate(String dateText) {
+        try {
+            return LocalDate.parse(dateText);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Date must be in yyyy-MM-dd format.");
+        }
     }
 }

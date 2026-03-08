@@ -23,6 +23,7 @@ public class App extends Application {
     private ComboBox<String> timeSlot;
     private TextField roomSlot;
     private TextField moduleSlot;
+    private CheckBox autoRefreshCheckBox;
 
     private Button Send;
     private Button Stop;
@@ -80,6 +81,10 @@ public class App extends Application {
         moduleSlot.setPromptText("Enter module");
         moduleSlot.setStyle("-fx-font-size: 14px; -fx-background-radius: 6;" + "-fx-font-family: monospace;");
 
+        autoRefreshCheckBox = new CheckBox("Auto Refresh");
+        autoRefreshCheckBox.setSelected(false);
+        autoRefreshCheckBox.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
+
         GridPane Grid = new GridPane();
         Grid.setPadding(new Insets(10));
         Grid.setHgap(8);
@@ -120,6 +125,8 @@ public class App extends Application {
 
         Grid.add(moduleLabel, 0, 4);
         Grid.add(moduleSlot, 1, 4);
+
+        Grid.add(autoRefreshCheckBox, 0, 5, 2, 1);
 
         Send = new Button("Send Request");
         Stop = new Button("Stop");
@@ -323,6 +330,12 @@ public class App extends Application {
 
             if (action.equals("DISPLAY") && serverReply.code == 200) {
                 refillTableFromPayload(serverReply.body);
+            }
+
+            if ((action.equals("ADD") || action.equals("REMOVE"))
+                    && serverReply.code == 200
+                    && autoRefreshCheckBox.isSelected()) {
+                refillTableFromServer();
             }
 
         } catch (Exception ex) {

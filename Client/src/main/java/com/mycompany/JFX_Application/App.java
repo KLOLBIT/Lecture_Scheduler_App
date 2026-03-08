@@ -16,7 +16,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 public class App extends Application {
-    private final TcpPart tcpPart = new TcpPart("127.0.0.1", 1234);
+    private final TcpService tcpService = new TcpService("127.0.0.1", 1234);
 
     private ComboBox<String> actionSlot;
     private DatePicker calendarSlot;
@@ -323,7 +323,7 @@ public class App extends Application {
         textInput.appendText("CLIENT -> " + requestMsg + "\n");
 
         try {
-            ServerPart serverReply = tcpPart.sendToServer(requestMsg);
+            TcpService.Response serverReply = tcpService.sendToServer(requestMsg);
 
             textInput.appendText("SERVER -> " + serverReply.rawResponse + "\n");
             statusLabel.setText("Status: " + serverReply.code);
@@ -355,7 +355,7 @@ public class App extends Application {
         textInput.appendText("CLIENT -> " + requestMsg + "\n");
 
         try {
-            ServerPart serverReply = tcpPart.sendToServer(requestMsg);
+            TcpService.Response serverReply = tcpService.sendToServer(requestMsg);
 
             textInput.appendText("SERVER -> " + serverReply.rawResponse + "\n");
 
@@ -364,7 +364,7 @@ public class App extends Application {
                 Send.setDisable(true);
                 Stop.setDisable(true);
                 statusLabel.setText("Status: TERMINATED");
-                tcpPart.closeQuietly();
+                tcpService.closeQuietly();
             } else {
                 statusLabel.setText("Status: " + serverReply.code);
             }
@@ -382,7 +382,7 @@ public class App extends Application {
         }
 
         try {
-            ServerPart serverReply = tcpPart.sendToServer("DISPLAY||||");
+            TcpService.Response serverReply = tcpService.sendToServer("DISPLAY||||");
 
             textInput.appendText("CLIENT -> DISPLAY||||\n");
             textInput.appendText("SERVER -> " + serverReply.rawResponse + "\n");
@@ -425,7 +425,7 @@ public class App extends Application {
 
     @Override
     public void stop() {
-        tcpPart.closeQuietly();
+        tcpService.closeQuietly();
     }
 
     public static void main(String[] args) {

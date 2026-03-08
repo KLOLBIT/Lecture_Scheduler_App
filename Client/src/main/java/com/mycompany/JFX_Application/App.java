@@ -190,10 +190,11 @@ public class App extends Application {
         scheduleView = new TableView<>();
         scheduleView.setItems(tableList);
         scheduleView.setStyle(
-                "-fx-font-size: 13px;" +
-                "-fx-background-radius: 10;"
+        "-fx-control-inner-background: #d9ffd9;" +
+        "-fx-background-color: #d9ffd9;" +
+        "-fx-font-size: 13px;"
         );
-
+        
         TableColumn<ScheduleRow, String> colDate = new TableColumn<>("Date");
         colDate.setCellValueFactory(new PropertyValueFactory<>("date"));
 

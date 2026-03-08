@@ -238,7 +238,7 @@ public class App extends Application {
             terminated_status = false;
             Send.setDisable(false);
             Stop.setDisable(false);
-            statusLabel.setText("Status: Connected to the server");
+            statusLabel.setText("Status: Ready to reconnect");
         });
 
         Scene scene = new Scene(mainArea, 1380, 860);

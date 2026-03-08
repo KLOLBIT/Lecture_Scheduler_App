@@ -42,6 +42,8 @@ public class TcpServerService {
 
         String request;
         while ((request = reader.readLine()) != null) {
+            writer.println(request.toUpperCase());
+
             var sections = request.split("\\|", -1);
             if (sections.length != 5) {
                 var response = formatResponse(400, "Invalid request body");

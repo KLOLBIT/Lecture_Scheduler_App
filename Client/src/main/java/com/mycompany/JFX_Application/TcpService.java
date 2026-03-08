@@ -23,12 +23,14 @@ public class TcpService {
         makeSureItIsConnected();
         writer.println(requestMsg);
 
-        String rawReply = reader.readLine();
-        if (rawReply == null) {
-            throw new IOException("Server closed connection.");
+        String rawReply;
+        while ((rawReply = reader.readLine()) != null) {
+            if (rawReply.startsWith("RESULT|")) {
+                return Response.fromRawReply(rawReply);
+            }
         }
 
-        return Response.fromRawReply(rawReply);
+        throw new IOException("Server closed connection.");
     }
 
     private void makeSureItIsConnected() throws IOException {

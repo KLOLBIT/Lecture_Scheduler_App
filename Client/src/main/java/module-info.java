@@ -1,4 +1,4 @@
-module com.mycompany.lab3solution {
+module com.mycompany.JFX_Application {
     requires javafx.controls;
-    exports com.mycompany.lab3solution;
+    exports com.mycompany.JFX_Application;
 }

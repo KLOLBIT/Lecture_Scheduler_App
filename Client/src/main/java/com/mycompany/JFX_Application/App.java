@@ -9,7 +9,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.GridPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -83,50 +83,7 @@ public class App extends Application {
 
         autoRefreshCheckBox = new CheckBox("Auto Refresh");
         autoRefreshCheckBox.setSelected(false);
-        autoRefreshCheckBox.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
-
-        GridPane Grid = new GridPane();
-        Grid.setPadding(new Insets(10));
-        Grid.setHgap(8);
-        Grid.setVgap(8);
-        Grid.setStyle(
-                "-fx-background-color: #18d037;" +
-                "-fx-background-radius: 12;" +
-                "-fx-border-color: #00fffb;" +
-                "-fx-border-radius: 12;"
-        );
-
-        Label actionLabel = new Label("Action:");
-        actionLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
-
-        Label dateLabel = new Label("Date:");
-        dateLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
-
-        Label timeLabel = new Label("Time:");
-        timeLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
-
-        Label roomLabel = new Label("Room:");
-        roomLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
-
-        Label moduleLabel = new Label("Module:");
-        moduleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;" + "-fx-font-family: monospace;");
-
-        Grid.add(actionLabel, 0, 0);
-        Grid.add(actionSlot, 1, 0);
-
-        Grid.add(dateLabel, 0, 1);
-        Grid.add(calendarSlot, 1, 1);
-
-        Grid.add(timeLabel, 0, 2);
-        Grid.add(timeSlot, 1, 2);
-
-        Grid.add(roomLabel, 0, 3);
-        Grid.add(roomSlot, 1, 3);
-
-        Grid.add(moduleLabel, 0, 4);
-        Grid.add(moduleSlot, 1, 4);
-
-        Grid.add(autoRefreshCheckBox, 0, 5, 2, 1);
+        autoRefreshCheckBox.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-font-family: monospace; -fx-text-fill: #18d037;");
 
         Send = new Button("Send Request");
         Stop = new Button("Stop");
@@ -163,16 +120,20 @@ public class App extends Application {
         );
 
         HBox rowButton = new HBox(10, Send, Stop, Clear);
-        rowButton.setPadding(new Insets(10, 0, 0, 0));
+        rowButton.setAlignment(Pos.CENTER_RIGHT);
+        rowButton.setMaxWidth(Double.MAX_VALUE);
 
-        VBox leftPart = new VBox(12, Grid, rowButton);
-        leftPart.setPrefWidth(320);
-        leftPart.setPadding(new Insets(10));
-        leftPart.setStyle(
-                "-fx-background-color: #2b2b2b;" +
-                "-fx-border-color: #00fffb;" +
-                "-fx-background-radius: 14;" +
-                "-fx-border-radius: 14;"
+        FlowPane controlRow = new FlowPane();
+        controlRow.setHgap(16);
+        controlRow.setVgap(12);
+        controlRow.setAlignment(Pos.CENTER_LEFT);
+        controlRow.getChildren().addAll(
+                addControlField("Action", actionSlot),
+                addControlField("Date", calendarSlot),
+                addControlField("Time", timeSlot),
+                addControlField("Room", roomSlot),
+                addControlField("Module", moduleSlot),
+                addControlField("Options", autoRefreshCheckBox)
         );
 
         textInput = new TextArea();
@@ -209,19 +170,58 @@ public class App extends Application {
 
         scheduleView.getColumns().addAll(colDate, colTime, colRoom, colModule);
 
-        VBox centerPart = new VBox(10, scheduleView, textInput);
-        centerPart.setPadding(new Insets(10));
+        VBox centerPart = new VBox(12, buildSectionTitle("Timetable"), scheduleView);
+        centerPart.setPadding(new Insets(16));
         centerPart.setStyle(
                 "-fx-background-color: #2b2b2b;" +
+                "-fx-border-color: #00fffb;" +
+                "-fx-border-radius: 14;" +
                 "-fx-background-radius: 14;"
         );
         VBox.setVgrow(scheduleView, Priority.ALWAYS);
 
+        VBox controlsCard = new VBox(12, buildSectionTitle("Controls"), controlRow, rowButton);
+        controlsCard.setPadding(new Insets(16));
+        controlsCard.setStyle(
+                "-fx-background-color: #2b2b2b;" +
+                "-fx-border-color: #00fffb;" +
+                "-fx-background-radius: 14;" +
+                "-fx-border-radius: 14;"
+        );
+
+        VBox workspace = new VBox(12, centerPart, controlsCard);
+        VBox.setVgrow(centerPart, Priority.ALWAYS);
+        HBox.setHgrow(workspace, Priority.ALWAYS);
+
+        VBox consoleCard = new VBox(12, buildSectionTitle("Console"), textInput);
+        consoleCard.setPadding(new Insets(16));
+        consoleCard.setStyle(
+                "-fx-background-color: #2b2b2b;" +
+                "-fx-border-color: #00fffb;" +
+                "-fx-background-radius: 14;" +
+                "-fx-border-radius: 14;"
+        );
+        VBox.setVgrow(textInput, Priority.ALWAYS);
+
+        VBox statusCard = new VBox(12, buildSectionTitle("Connection"), statusLabel);
+        statusCard.setPadding(new Insets(16));
+        statusCard.setStyle(
+                "-fx-background-color: #2b2b2b;" +
+                "-fx-border-color: #00fffb;" +
+                "-fx-background-radius: 14;" +
+                "-fx-border-radius: 14;"
+        );
+
+        VBox rightSidebar = new VBox(12, statusCard, consoleCard);
+        rightSidebar.setPrefWidth(380);
+        VBox.setVgrow(consoleCard, Priority.ALWAYS);
+
+        HBox mainContent = new HBox(12, workspace, rightSidebar);
+
         BorderPane mainArea = new BorderPane();
-        mainArea.setTop(new VBox(10, buildHeader(), statusLabel));
-        VBox.setMargin(statusLabel, new Insets(0, 0, 12, 0));
-        mainArea.setLeft(leftPart);
-        mainArea.setCenter(centerPart);
+        mainArea.setTop(buildHeader());
+        mainArea.setCenter(mainContent);
+        BorderPane.setMargin(mainContent, new Insets(12, 0, 0, 0));
         mainArea.setPadding(new Insets(12));
         mainArea.setStyle("-fx-background-color: #2b2b2b;");
 
@@ -241,7 +241,7 @@ public class App extends Application {
             statusLabel.setText("Status: Connected to the server");
         });
 
-        Scene scene = new Scene(mainArea, 1402, 2006);
+        Scene scene = new Scene(mainArea, 1380, 860);
 
         stage.setTitle("Lecture Scheduler Application");
         stage.setScene(scene);
@@ -275,6 +275,21 @@ public class App extends Application {
         );
 
         return headerBox;
+    }
+
+    private Label buildSectionTitle(String text) {
+        Label sectionTitle = new Label(text);
+        sectionTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-font-family: monospace; -fx-text-fill: #18d037;");
+        return sectionTitle;
+    }
+
+    private VBox addControlField(String labelText, Control inputControl) {
+        Label controlLabel = new Label(labelText + ":");
+        controlLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-font-family: monospace; -fx-text-fill: #18d037;");
+
+        VBox fieldBox = new VBox(8, controlLabel, inputControl);
+        fieldBox.setAlignment(Pos.TOP_LEFT);
+        return fieldBox;
     }
 
     private void serverRequest() {
